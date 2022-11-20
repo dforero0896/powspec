@@ -20,14 +20,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-PK *compute_pk(CATA *cata, bool save_out, bool has_randoms, int argc, char *argv[]) {
+PK *compute_pk(CATA *cata, bool has_randoms, int argc, char *argv[], bool is_cross, bool* is_auto, int inum) {
   //printf("The following arguments were passed to main():\n");
   //printf("argnum \t value \n");
   //for (int i = 0; i<argc; i++) printf("%d \t %s \n", i, argv[i]);
   //printf("\n");
-
+  for (int i = 0; i < argc; i++){
+    printf("\n %s \n", argv[i]);
+  }
   CONF *conf;
-  if (!(conf = load_conf(argc, argv))) {
+  if (!(conf = load_conf(argc, argv, is_cross, is_auto, inum))) {
     printf(FMT_FAIL);
     P_EXT("failed to load configuration parameters\n");
     return NULL;
@@ -70,7 +72,7 @@ PK *compute_pk(CATA *cata, bool save_out, bool has_randoms, int argc, char *argv
   //}
 
 
-   if (save_out && save_res(conf, cata, mesh, pk)) {
+   if (save_res(conf, cata, mesh, pk)) {
      printf(FMT_FAIL);
      P_EXT("failed to write the output to file.\n");
      conf_destroy(conf);

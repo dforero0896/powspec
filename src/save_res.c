@@ -43,7 +43,7 @@ int save_res(const CONF *conf, const CATA *cat, const MESH *mesh,
 
   for (int n = 0; n < cat->num; n++) {
     if (!conf->isauto[n]) continue;
-
+    if (conf->oauto == NULL) return 0;
     /* Save the auto power spectra. */
     if (output_newfile(ofile, conf->oauto[n])) {
       output_destroy(ofile); return POWSPEC_ERR_FILE;
@@ -139,6 +139,7 @@ int save_res(const CONF *conf, const CATA *cat, const MESH *mesh,
     return 0;
   }
 
+  if (conf->ocross == NULL) return 0;
   /* Save the cross power spectra. */
   if (output_newfile(ofile, conf->ocross)) {
     output_destroy(ofile); return POWSPEC_ERR_FILE;

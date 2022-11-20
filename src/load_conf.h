@@ -107,7 +107,7 @@ Arguments:
 Return:
   The structure for storing configurations.
 ******************************************************************************/
-CONF *load_conf(const int argc, char *const *argv);
+CONF *load_conf(const int argc, char *const *argv, bool is_cross, bool* is_auto, int inum);
 
 /******************************************************************************
 Function `conf_destroy`:

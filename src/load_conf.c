@@ -368,29 +368,9 @@ static cfg_t *conf_read(CONF *conf, const int argc, char *const *argv) {
   };
 
   /* Configuration parameters. */
-  const int npar = 45;
+  const int npar = 25;
   const cfg_param_t params[] = {
     {'c', "conf"          , "CONFIG_FILE"    , CFG_DTYPE_STR , &conf->fconf},
-    {'d', "data"          , "DATA_CATALOG"   , CFG_ARRAY_STR , &conf->dfname},
-    {'r', "rand"          , "RAND_CATALOG"   , CFG_ARRAY_STR , &conf->rfname},
-    {'f', "data-format"   , "DATA_FORMAT"    , CFG_ARRAY_INT , &conf->dftype},
-    {'F', "rand-format"   , "RAND_FORMAT"    , CFG_ARRAY_INT , &conf->rftype},
-    { 0 , "data-skip"     , "DATA_SKIP"      , CFG_ARRAY_LONG, &conf->dskip},
-    { 0 , "rand-skip"     , "RAND_SKIP"      , CFG_ARRAY_LONG, &conf->dskip},
-    { 0 , "data-comment"  , "DATA_COMMENT"   , CFG_ARRAY_CHAR, &conf->dcmt},
-    { 0 , "rand-comment"  , "RAND_COMMENT"   , CFG_ARRAY_CHAR, &conf->rcmt},
-    { 0 , "data-formatter", "DATA_FORMATTER" , CFG_ARRAY_STR , &conf->dfmtr},
-    { 0 , "rand-formatter", "RAND_FORMATTER" , CFG_ARRAY_STR , &conf->rfmtr},
-    {'p', "data-pos"      , "DATA_POSITION"  , CFG_ARRAY_STR , &conf->dpos},
-    {'P', "rand-pos"      , "RAND_POSITION"  , CFG_ARRAY_STR , &conf->rpos},
-    { 0 , "data-wt-comp"  , "DATA_WT_COMP"   , CFG_ARRAY_STR , &conf->dwcomp},
-    { 0 , "rand-wt-comp"  , "RAND_WT_COMP"   , CFG_ARRAY_STR , &conf->rwcomp},
-    { 0 , "data-wt-fkp"   , "DATA_WT_FKP"    , CFG_ARRAY_STR , &conf->dwfkp},
-    { 0 , "rand-wt-fkp"   , "RAND_WT_FKP"    , CFG_ARRAY_STR , &conf->rwfkp},
-    { 0 , "data-nz"       , "DATA_NZ"        , CFG_ARRAY_STR , &conf->dnz},
-    { 0 , "rand-nz"       , "RAND_NZ"        , CFG_ARRAY_STR , &conf->rnz},
-    { 0 , "data-select"   , "DATA_SELECTION" , CFG_ARRAY_STR , &conf->dsel},
-    { 0 , "rand-select"   , "RAND_SELECTION" , CFG_ARRAY_STR , &conf->rsel},
     { 0 , "data-convert"  , "DATA_CONVERT"   , CFG_ARRAY_BOOL, &conf->dcnvt},
     { 0 , "rand-convert"  , "RAND_CONVERT"   , CFG_ARRAY_BOOL, &conf->rcnvt},
     {'m', "omega-m"       , "OMEGA_M"        , CFG_DTYPE_DBL , &conf->omega_m},
@@ -435,6 +415,7 @@ static cfg_t *conf_read(CONF *conf, const int argc, char *const *argv) {
     P_WRN("cannot access the configuration file: `%s'\n", conf->fconf);
   else if (cfg_read_file(cfg, conf->fconf, POWSPEC_PRIOR_FILE)) P_CFG_ERR(cfg);
   P_CFG_WRN(cfg);
+  printf("\nTST\n");
   return cfg;
 }
 
@@ -921,7 +902,7 @@ Arguments:
 Return:
   Zero on success; non-zero on error.
 ******************************************************************************/
-static int conf_verify(const cfg_t *cfg, CONF *conf) {
+static int conf_verify(const cfg_t *cfg, CONF *conf, bool is_cross, bool* is_auto, int inum) {
   int i, e, num;
   
   /* Check CUBIC_SIM first, since it decides whether random is needed. */
@@ -935,13 +916,22 @@ static int conf_verify(const cfg_t *cfg, CONF *conf) {
   if (!cfg_is_set(cfg, &conf->ovwrite)) conf->ovwrite = DEFAULT_OVERWRITE;
 
   /* Check OUTPUT_CROSS. */
-  conf->iscross = false;
-  conf->ndata = 0;
-  if (cfg_is_set(cfg, &conf->ocross) && *conf->ocross) {
-    if ((e = check_output(conf->ocross, "OUTPUT_CROSS", conf->ovwrite)))
-      return e;
+  //conf->iscross = false;
+  //conf->ndata = 0;
+  //if (cfg_is_set(cfg, &conf->ocross) && *conf->ocross) {
+  //  if ((e = check_output(conf->ocross, "OUTPUT_CROSS", conf->ovwrite)))
+  //    return e;
+  //  conf->iscross = true;
+  //  conf->ndata = 2;
+  //}
+  if ((cfg_is_set(cfg, &conf->ocross) && *conf->ocross)) {
     conf->iscross = true;
     conf->ndata = 2;
+  }
+  else{
+    conf->iscross = is_cross;
+    conf-> ndata = is_cross ? 2 : 0;
+    conf->ocross = NULL;
   }
 
   /* Check OUTPUT_AUTO. */
@@ -962,36 +952,25 @@ static int conf_verify(const cfg_t *cfg, CONF *conf) {
       }
     }
   }
+  else{
+    conf->oauto = NULL;
+    num = inum;
+    if (!conf->iscross) conf->ndata = (num > 2) ? 2 : num;
+    if (num > 2) {
+      P_WRN("provided number of catalogs grater than 2.");
+      for (i = 2; i < num; i++) fprintf(stderr, "%s\n", conf->oauto[i]);
+      num = 2;
+    }
+    for (i = 0; i < num; i++) {
+      /* OUTPUT_AUTO can be omitted by passing an empty string. */
+      conf->isauto[i] = is_auto[i];
+    }
+  }
   if (!conf->ndata) {
     P_ERR("no output file specified\n");
     return POWSPEC_ERR_CFG;
   }
   
-  /* Check format settings of DATA_CATALOG. */
-  //if ((e = check_file_fmt(cfg, conf->ndata, "DATA", conf->issim,
-  //    &conf->dfname, conf->has_asc, &conf->dftype, &conf->dskip,
-  //    &conf->dcmt, &conf->dfmtr, &conf->dpos, &conf->dwcomp, &conf->dwfkp,
-  //    &conf->dnz, &conf->dsel, &conf->dcnvt))) return e;
-
-  //for (i = 0; i < conf->ndata; i++)
-  //  if ((e = check_input(conf->dfname[i], "DATA_CATALOG"))) return e;
-
-  //if (!conf->issim) {
-  //  /* Check format settings of RAND_CATALOG. */
-  //  if ((e = check_file_fmt(cfg, conf->ndata, "RAND", conf->issim,
-  //      &conf->rfname, conf->has_asc + 1, &conf->rftype, &conf->rskip,
-  //      &conf->rcmt, &conf->rfmtr, &conf->rpos, &conf->rwcomp, &conf->rwfkp,
-  //      &conf->rnz, &conf->rsel, &conf->rcnvt))) return e;
-
-  //  for (i = 0; i < conf->ndata; i++)
-  //    if ((e = check_input(conf->dfname[i], "RAND_CATALOG"))) return e;
-
-  //  /* Check DATA_NZ and RAND_NZ. */
-  //  if (!(conf->dnz) && !(conf->rnz)) {
-  //    P_ERR(FMT_KEY(DATA_NZ) " and " FMT_KEY(RAND_NZ) " are both not set\n");
-  //    return POWSPEC_ERR_CFG;
-  //  }
-  //}
   
   /* Check if coordinate coversion is required. */
   conf->cnvt = false;
@@ -1352,11 +1331,15 @@ static void conf_print(const CONF *conf) {
     printf("\n  KMAX            = " OFMT_DBL, conf->kmax);
   printf("\n  LOG_SCALE       = %c", conf->logscale ? 'T' : 'F');
   printf("\n  BIN_SIZE        = " OFMT_DBL, conf->kbin);
-  if (conf->isauto[0] || conf->isauto[1]) {
-    printf("\n  OUTPUT_AUTO     = %s", conf->oauto[0]);
-    if (twocat) printf("\n                    %s", conf->oauto[1]);
+  if (conf->oauto){
+    if (conf->isauto[0] || conf->isauto[1]) {
+      printf("\n  OUTPUT_AUTO     = %s", conf->oauto[0]);
+      if (twocat) printf("\n                    %s", conf->oauto[1]);
+    }
   }
-  if (conf->iscross) printf("\n  OUTPUT_CROSS    = %s", conf->ocross);
+  if (conf->ocross){
+    if (conf->iscross) printf("\n  OUTPUT_CROSS    = %s", conf->ocross);
+  }
   printf("\n  OUTPUT_HEADER   = %c", conf->oheader ? 'T' : 'F');
   printf("\n  OVERWRITE       = %d\n", conf->ovwrite);
 }
@@ -1375,7 +1358,7 @@ Arguments:
 Return:
   The structure for storing configurations.
 ******************************************************************************/
-CONF *load_conf(const int argc, char *const *argv) {
+CONF *load_conf(const int argc, char *const *argv, bool is_cross, bool* is_auto, int inum) {
   printf("Loading configurations ...");
   fflush(stdout);
 
@@ -1386,8 +1369,8 @@ CONF *load_conf(const int argc, char *const *argv) {
     conf_destroy(conf);
     return NULL;
   }
-
-  if (conf_verify(cfg, conf)) {
+  
+  if (conf_verify(cfg, conf, is_cross, is_auto, inum)) {
     if (cfg_is_set(cfg, &conf->fconf)) free(conf->fconf);
     conf_destroy(conf);
     cfg_destroy(cfg);

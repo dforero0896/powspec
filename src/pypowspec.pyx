@@ -155,7 +155,7 @@ cdef extern from "read_cata.h":
 # powspec.h
 cdef extern from "powspec.h":
 
-    PK *compute_pk(CATA* cata, bint save_out, bint has_randoms, int argc, char* argv[]) nogil;
+    PK *compute_pk(CATA* cata, bint has_randoms, int argc, char* argv[], bint is_cross, bint* is_auto, int inum) nogil;
 
 # multipole.h
 
@@ -291,37 +291,13 @@ def compute_auto_box(floating[:] data_x, #Assumes double precision input/FFTW!
                         floating[:] data_y, 
                         floating[:] data_z, 
                         floating[:] data_w,
-                        powspec_conf_file,
-                        output_file = None):
+                        **kwargs):
 
     
-    save_out = output_file is not None
-    if not save_out:
-        # Define dummy names for IO so conf does not crash
-        test_output = "--auto=test/test.out"
-    else:
-        test_output = f"--auto={output_file}"
-    test_output_bytes = test_output.encode('utf-8') + b'\x00'
-    cdef char* test_output_string = test_output_bytes
-
-    # Define name of the configuration file to use
-    # TODO: Generate temporary configuration file at fixed location
-    #       from options passed to function. See i.e. 
-    #       https://github.com/dforero0896/fcfcwrap
-    # TODO: (Alternative/harder) override CONF structure
-    conf = f"--conf={powspec_conf_file}"
-    conf_bytes = conf.encode('utf-8') + b'\x00'
-    cdef char* conf_string = conf_bytes
-
     
-
-    # Define dummy argc, argv to send to powspec main function
-    # This should remain similar once we generate a conf file.
-    cdef int argc = 3
-    cdef char* argv[3]
+    cdef int argc = len(kwargs) + 1
+    cdef char** argv = process_kwargs_to_args(kwargs)
     argv[0] = arg0_str
-    argv[1] = conf_string
-    argv[2] = test_output_string
 
     # Create CATA structure (involves data copying)
     cdef int ndata = 1;
@@ -337,8 +313,12 @@ def compute_auto_box(floating[:] data_x, #Assumes double precision input/FFTW!
                                         0,
                                         0,
                                         True)
-
-    cdef PK* pk = compute_pk(cat, <bint> save_out, False, argc, argv)
+    cdef bint *is_auto = <bint*> malloc(sizeof(bint))
+    is_auto[0] = True
+    cdef int inum = 1
+    cdef bint is_cross = False
+    cdef PK* pk = compute_pk(cat, False, argc, argv, is_cross, is_auto, inum)
+    
     if pk is NULL: raise ValueError("Could not create PK structure.")
     pk_result = {}
     pk_result['n_data_objects'] = cat.ndata[0]
@@ -368,7 +348,8 @@ def compute_auto_box(floating[:] data_x, #Assumes double precision input/FFTW!
     cata_destroy(cat)
     powspec_destroy(pk)
     free(sumw2)
-    
+    free(is_auto)
+    free(argv)
     return pk_result
 
 
@@ -380,42 +361,12 @@ def compute_cross_box(floating[:] data_1_x, #Assumes double precision input/FFTW
                       floating[:] data_2_y, 
                       floating[:] data_2_z, 
                       floating[:] data_2_w,
-                      powspec_conf_file,
-                      output_auto = None,
-                      output_cross = None):
+                      **kwargs):
 
     
-    save_auto = output_auto is not None
-    if not save_auto:
-        # Define dummy names for IO so conf does not crash
-        auto_output = "--auto=[test/auto_1.out,test/auto_2.out]"
-        cross_output = "--cross=test/cross.out"
-    else:
-        auto_output = f"--auto=[{','.join(output_auto)}]"
-        cross_output = f"--cross={output_cross}"
-    auto_output_bytes = auto_output.encode('utf-8') + b'\x00'
-    cdef char* auto_output_string = auto_output_bytes
-
-    cross_output_bytes = cross_output.encode('utf-8') + b'\x00'
-    cdef char* cross_output_string = cross_output_bytes
-
-    # Define name of the configuration file to use
-    # TODO: Generate temporary configuration file at fixed location
-    #       from options passed to function. See i.e. 
-    #       https://github.com/dforero0896/fcfcwrap
-    # TODO: (Alternative/harder) override CONF structure
-    conf = f"--conf={powspec_conf_file}"
-    conf_bytes = conf.encode('utf-8') + b'\x00'
-    cdef char* conf_string = conf_bytes
-
-    # Define dummy argc, argv to send to powspec main function
-    # This should remain similar once we generate a conf file.
-    cdef int argc = 4
-    cdef char* argv[4]
+    cdef int argc = len(kwargs) + 1
+    cdef char** argv = process_kwargs_to_args(kwargs)
     argv[0] = arg0_str
-    argv[1] = conf_string
-    argv[2] = auto_output_string
-    argv[3] = cross_output_string
 
     # Create CATA structure (involves data copying)
     cdef int ndata = 2;
@@ -442,8 +393,12 @@ def compute_cross_box(floating[:] data_1_x, #Assumes double precision input/FFTW
                                          False,
                                          True)
                      
-
-    cdef PK* pk = compute_pk(cat, <bint> save_auto, False, argc, argv)
+    cdef bint *is_auto = <bint*> malloc(2 * sizeof(bint))
+    is_auto[0] = False
+    is_auto[1] = False
+    cdef int inum = 2
+    cdef bint is_cross = True
+    cdef PK* pk = compute_pk(cat, False, argc, argv, is_cross, is_auto, inum)
     if pk is NULL: raise ValueError("Could not create PK structure.")
     pk_result = {}
     pk_result['n_data_objects'] = [cat.ndata[i] for i in range(cat.num)]
@@ -477,7 +432,8 @@ def compute_cross_box(floating[:] data_1_x, #Assumes double precision input/FFTW
     powspec_destroy(pk)
     free(sumw2_a)
     free(sumw2_b)
-    
+    free(is_auto)
+    free(argv)
     return pk_result
 
 
@@ -493,35 +449,12 @@ def compute_auto_lc(floating[:] data_x, #Assumes double precision input/FFTW!
                     floating[:] rand_wcomp,
                     floating[:] rand_wfkp,
                     floating[:] rand_nz,
-                    powspec_conf_file,
-                    output_file = None):
+                    **kwargs):
  
 
-    save_out = output_file is not None
-    if not save_out:
-        # Define dummy names for IO so conf does not crash
-        test_output = "--auto=test/test.out"
-    else:
-        test_output = f"--auto={output_file}"
-    test_output_bytes = test_output.encode('utf-8') + b'\x00'
-    cdef char* test_output_string = test_output_bytes
-
-    # Define name of the configuration file to use
-    # TODO: Generate temporary configuration file at fixed location
-    #       from options passed to function. See i.e. 
-    #       https://github.com/dforero0896/fcfcwrap
-    # TODO: (Alternative/harder) override CONF structure
-    conf = f"--conf={powspec_conf_file}"
-    conf_bytes = conf.encode('utf-8') + b'\x00'
-    cdef char* conf_string = conf_bytes
-
-    # Define dummy argc, argv to send to powspec main function
-    # This should remain similar once we generate a conf file.
-    cdef int argc = 3
-    cdef char* argv[3]
+    cdef int argc = len(kwargs) + 1
+    cdef char** argv = process_kwargs_to_args(kwargs)
     argv[0] = arg0_str
-    argv[1] = conf_string
-    argv[2] = test_output_string
 
     # Create CATA structure (involves data copying)
     cdef int ndata = 1;
@@ -562,8 +495,11 @@ def compute_auto_lc(floating[:] data_x, #Assumes double precision input/FFTW!
     
     
 
-
-    cdef PK* pk = compute_pk(cat, <bint> save_out, True, argc, argv)
+    cdef bint *is_auto = <bint*> malloc(sizeof(bint))
+    is_auto[0] = True
+    cdef int inum = 1
+    cdef bint is_cross = False
+    cdef PK* pk = compute_pk(cat, True, argc, argv, is_cross, is_auto, inum)
     if pk is NULL: raise ValueError("Could not create PK structure.")
     pk_result = {}
     pk_result['n_data_objects'] = cat.ndata[0]
@@ -594,7 +530,8 @@ def compute_auto_lc(floating[:] data_x, #Assumes double precision input/FFTW!
     powspec_destroy(pk)
     free(sumw2_dat)
     free(sumw2_ran)
-    
+    free(is_auto)
+    free(argv)
     return pk_result
 
 def compute_cross_lc(floating[:] data_1_x, #Assumes double precision input/FFTW!
@@ -621,42 +558,11 @@ def compute_cross_lc(floating[:] data_1_x, #Assumes double precision input/FFTW!
                      floating[:] rand_2_wcomp,
                      floating[:] rand_2_wfkp,
                      floating[:] rand_2_nz,
-                     powspec_conf_file,
-                     output_auto = None,
-                     output_cross = None):
+                     **kwargs):
  
-    save_auto = output_auto is not None
-    if not save_auto:
-        # Define dummy names for IO so conf does not crash
-        auto_output = "--auto=[test/auto_1.out,test/auto_2.out]"
-        cross_output = "--cross=test/cross.out"
-    else:
-        auto_output = f"--auto=[{','.join(output_auto)}]"
-        cross_output = f"--cross={output_cross}"
-    auto_output_bytes = auto_output.encode('utf-8') + b'\x00'
-    cdef char* auto_output_string = auto_output_bytes
-
-    cross_output_bytes = cross_output.encode('utf-8') + b'\x00'
-    cdef char* cross_output_string = cross_output_bytes
-
-
-    # Define name of the configuration file to use
-    # TODO: Generate temporary configuration file at fixed location
-    #       from options passed to function. See i.e. 
-    #       https://github.com/dforero0896/fcfcwrap
-    # TODO: (Alternative/harder) override CONF structure
-    conf = f"--conf={powspec_conf_file}"
-    conf_bytes = conf.encode('utf-8') + b'\x00'
-    cdef char* conf_string = conf_bytes
-
-    # Define dummy argc, argv to send to powspec main function
-    # This should remain similar once we generate a conf file.
-    cdef int argc = 4
-    cdef char* argv[4]
-    argv[0] = arg0_str
-    argv[1] = conf_string
-    argv[2] = auto_output_string
-    argv[3] = cross_output_string
+    cdef int argc = len(kwargs) + 1
+    cdef char** argv = process_kwargs_to_args(kwargs)
+    [print(argv[i]) for i in range(argc)]
 
     # Create CATA structure (involves data copying)
     cdef int ndata = 2;
@@ -694,9 +600,9 @@ def compute_cross_lc(floating[:] data_1_x, #Assumes double precision input/FFTW!
     elif (sumw2_ran[1] == 0): cat.norm[i] = sumw2_dat[1]
     # Check consistency (TODO) and Normalise using the random. 
     else: cat.norm[i] = cat.alpha[i] * sumw2_ran[1]
-    print(sumw2_dat[0], sumw2_dat[1])
-    print(sumw2_ran[0], sumw2_ran[1])
-    print(cat.shot[i])
+    #print(sumw2_dat[0], sumw2_dat[1])
+    #print(sumw2_ran[0], sumw2_ran[1])
+    #print(cat.shot[i])
 
     # Repeat with second set of catalogs
 
@@ -737,13 +643,17 @@ def compute_cross_lc(floating[:] data_1_x, #Assumes double precision input/FFTW!
     elif (sumw2_ran[1] == 0): cat.norm[i] = sumw2_dat[1]
     # Check consistency (TODO) and Normalise using the random. 
     else: cat.norm[i] = cat.alpha[i] * sumw2_ran[1]
-    print(sumw2_dat[0], sumw2_dat[1])
-    print(sumw2_ran[0], sumw2_ran[1])
-    print(cat.shot[i])
+    #print(sumw2_dat[0], sumw2_dat[1])
+    #print(sumw2_ran[0], sumw2_ran[1])
+    #print(cat.shot[i])
     
-
-
-    cdef PK* pk = compute_pk(cat, <bint> save_auto, True, argc, argv)
+    print(kwargs)
+    cdef bint *is_auto = <bint*> malloc(2 * sizeof(bint))
+    is_auto[0] = False
+    is_auto[1] = False
+    cdef int inum = 2
+    cdef bint is_cross = True
+    cdef PK* pk = compute_pk(cat, True, argc, argv, is_cross, is_auto, inum)
     if pk is NULL: raise ValueError("Could not create PK structure.")
     pk_result = {}
     pk_result['n_data_objects'] = [cat.ndata[i] for i in range(cat.num)]
@@ -775,7 +685,8 @@ def compute_cross_lc(floating[:] data_1_x, #Assumes double precision input/FFTW!
     powspec_destroy(pk)
     free(sumw2_dat)
     free(sumw2_ran)
-    
+    free(is_auto)
+    free(argv)
     return pk_result
 
 def compute_auto_box_rand(floating[:] data_x, #Assumes double precision input/FFTW!
@@ -786,37 +697,12 @@ def compute_auto_box_rand(floating[:] data_x, #Assumes double precision input/FF
                           floating[:] rand_y, 
                           floating[:] rand_z, 
                           floating[:] rand_w,
-                          powspec_conf_file,
-                          output_file = None):
+                          **kwargs):
 
     
-    save_out = output_file is not None
-    if not save_out:
-        # Define dummy names for IO so conf does not crash
-        test_output = "--auto=test/test.out"
-    else:
-        test_output = f"--auto={output_file}"
-    test_output_bytes = test_output.encode('utf-8') + b'\x00'
-    cdef char* test_output_string = test_output_bytes
-
-    # Define name of the configuration file to use
-    # TODO: Generate temporary configuration file at fixed location
-    #       from options passed to function. See i.e. 
-    #       https://github.com/dforero0896/fcfcwrap
-    # TODO: (Alternative/harder) override CONF structure
-    conf = f"--conf={powspec_conf_file}"
-    conf_bytes = conf.encode('utf-8') + b'\x00'
-    cdef char* conf_string = conf_bytes
-
-    
-
-    # Define dummy argc, argv to send to powspec main function
-    # This should remain similar once we generate a conf file.
-    cdef int argc = 3
-    cdef char* argv[3]
+    cdef int argc = len(kwargs) + 1
+    cdef char** argv = process_kwargs_to_args(kwargs)
     argv[0] = arg0_str
-    argv[1] = conf_string
-    argv[2] = test_output_string
 
     # Create CATA structure (involves data copying)
     cdef int ndata = 1;
@@ -847,16 +733,12 @@ def compute_auto_box_rand(floating[:] data_x, #Assumes double precision input/FF
                                            True)
     
     cat.alpha[i] = cat.wdata[i] / cat.wrand[i]
-    # Shot noise from both data and random 
-    cat.shot[i] = sumw2_dat[0] + cat.alpha[i] * cat.alpha[i] * sumw2_ran[0]
-    # Normalise using the random. 
-    if (sumw2_dat[1] == 0): cat.norm[i] = cat.alpha[i] * sumw2_ran[1]
-    #Normalise using the data. 
-    elif (sumw2_ran[1] == 0): cat.norm[i] = sumw2_dat[1]
-    # Check consistency (TODO) and Normalise using the random. 
-    else: cat.norm[i] = cat.alpha[i] * sumw2_ran[1]
-
-    cdef PK* pk = compute_pk(cat, <bint> save_out, True, argc, argv)
+ 
+    cdef bint *is_auto = <bint*> malloc(sizeof(bint))
+    is_auto[0] = True
+    cdef int inum = 1
+    cdef bint is_cross = False
+    cdef PK* pk = compute_pk(cat, True, argc, argv, is_cross, is_auto, inum)
     if pk is NULL: raise ValueError("Could not create PK structure.")
     pk_result = {}
     pk_result['n_data_objects'] = cat.ndata[0]
@@ -887,7 +769,8 @@ def compute_auto_box_rand(floating[:] data_x, #Assumes double precision input/FF
     powspec_destroy(pk)
     free(sumw2_dat)
     free(sumw2_ran)
-    
+    free(is_auto)
+    free(argv)
     return pk_result
 
 def compute_cross_box_rand(floating[:] data_1_x, #Assumes double precision input/FFTW!
@@ -906,42 +789,12 @@ def compute_cross_box_rand(floating[:] data_1_x, #Assumes double precision input
                            floating[:] rand_2_y, 
                            floating[:] rand_2_z, 
                            floating[:] rand_2_w,
-                           powspec_conf_file,
-                           output_auto = None,
-                           output_cross = None):
+                           **kwargs):
 
     
-    save_auto = output_auto is not None
-    if not save_auto:
-        # Define dummy names for IO so conf does not crash
-        auto_output = "--auto=[test/auto_1.out,test/auto_2.out]"
-        cross_output = "--cross=test/cross.out"
-    else:
-        auto_output = f"--auto=[{','.join(output_auto)}]"
-        cross_output = f"--cross={output_cross}"
-    auto_output_bytes = auto_output.encode('utf-8') + b'\x00'
-    cdef char* auto_output_string = auto_output_bytes
-
-    cross_output_bytes = cross_output.encode('utf-8') + b'\x00'
-    cdef char* cross_output_string = cross_output_bytes
-
-    # Define name of the configuration file to use
-    # TODO: Generate temporary configuration file at fixed location
-    #       from options passed to function. See i.e. 
-    #       https://github.com/dforero0896/fcfcwrap
-    # TODO: (Alternative/harder) override CONF structure
-    conf = f"--conf={powspec_conf_file}"
-    conf_bytes = conf.encode('utf-8') + b'\x00'
-    cdef char* conf_string = conf_bytes
-
-    # Define dummy argc, argv to send to powspec main function
-    # This should remain similar once we generate a conf file.
-    cdef int argc = 4
-    cdef char* argv[4]
-    argv[0] = arg0_str
-    argv[1] = conf_string
-    argv[2] = auto_output_string
-    argv[3] = cross_output_string
+    cdef int argc = len(kwargs) + 1
+    cdef char** argv = process_kwargs_to_args(kwargs)
+    
 
     # Create CATA structure (involves data copying)
     cdef int ndata = 2;
@@ -972,14 +825,7 @@ def compute_cross_box_rand(floating[:] data_1_x, #Assumes double precision input
                                            True)
     
     cat.alpha[i] = cat.wdata[i] / cat.wrand[i]
-    # Shot noise from both data and random 
-    cat.shot[i] = sumw2_dat[0] + cat.alpha[i] * cat.alpha[i] * sumw2_ran[0]
-    # Normalise using the random. 
-    if (sumw2_dat[1] == 0): cat.norm[i] = cat.alpha[i] * sumw2_ran[1]
-    #Normalise using the data. 
-    elif (sumw2_ran[1] == 0): cat.norm[i] = sumw2_dat[1]
-    # Check consistency (TODO) and Normalise using the random. 
-    else: cat.norm[i] = cat.alpha[i] * sumw2_ran[1]
+    
 
     i = 1;
     sumw2_dat[0] = 0
@@ -1011,16 +857,13 @@ def compute_cross_box_rand(floating[:] data_1_x, #Assumes double precision input
 
 
     cat.alpha[i] = cat.wdata[i] / cat.wrand[i]
-    # Shot noise from both data and random 
-    cat.shot[i] = sumw2_dat[0] + cat.alpha[i] * cat.alpha[i] * sumw2_ran[0]
-    # Normalise using the random. 
-    if (sumw2_dat[1] == 0): cat.norm[i] = cat.alpha[i] * sumw2_ran[1]
-    #Normalise using the data. 
-    elif (sumw2_ran[1] == 0): cat.norm[i] = sumw2_dat[1]
-    # Check consistency (TODO) and Normalise using the random. 
-    else: cat.norm[i] = cat.alpha[i] * sumw2_ran[1]
-
-    cdef PK* pk = compute_pk(cat, <bint> save_auto, True, argc, argv)
+    
+    cdef bint *is_auto = <bint*> malloc(2 * sizeof(bint))
+    is_auto[0] = False
+    is_auto[1] = False
+    cdef int inum = 2
+    cdef bint is_cross = True
+    cdef PK* pk = compute_pk(cat, True, argc, argv, is_cross, is_auto, inum)
     if pk is NULL: raise ValueError("Could not create PK structure.")
     pk_result = {}
     pk_result['n_data_objects'] = [cat.ndata[i] for i in range(cat.num)]
@@ -1054,5 +897,30 @@ def compute_cross_box_rand(floating[:] data_1_x, #Assumes double precision input
     powspec_destroy(pk)
     free(sumw2_dat)
     free(sumw2_ran)
+    free(is_auto)
+    free(argv)
     
     return pk_result
+
+
+cdef char** process_kwargs_to_args(dict kwargs):
+    str_args_list = []
+    cdef int argc = len(kwargs) + 1
+    cdef char** argv = <char**> malloc(sizeof(char*) * argc)
+    cdef char *c_string
+    c_string = b"POWSPEC\x00"
+    argv[0] = c_string
+    for i, (key, val) in enumerate(kwargs.items()):
+        str_args_list.append(f"--{key.replace('_', '-')}={str(val)}".replace('\'', '').encode('utf-8') + b'\x00')
+        print(str_args_list[-1])
+        c_string = str_args_list[-1]
+        print(c_string)
+        argv[i+1] = c_string
+    return argv
+#cdef char* string_to_charp(unicode string):
+#    cdef int length = len(string) + 1
+#    cdef char* retval = <char*> malloc(sizeof(char) * length)
+#    for i in range(length - 1):
+#        retval[i] = <bytes> string[i]
+#    retval[length] = b"\x00"
+#    return retval

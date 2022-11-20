@@ -8,7 +8,7 @@ from pypowspec import compute_auto_box_rand, compute_cross_box_rand
 
 try:
     import pandas as pd
-    test_fname = "/global/project/projectdirs/desi/mocks/UNIT/HOD_Shadab/HOD_boxes/redshift0.9873/UNIT_DESI_Shadab_HOD_snap97_ELG_v0.txt"
+    test_fname = "/global/cfs/cdirs/desi/mocks/UNIT/HOD_Shadab/HOD_boxes/redshift0.9873/UNIT_DESI_Shadab_HOD_snap97_ELG_v0.txt"
     data = pd.read_csv(test_fname, usecols = (0,1,3), engine='c', delim_whitespace=True, names = ['x', 'y', 'zrsd']).values
     nobj = data.shape[0]
 except:
@@ -27,9 +27,9 @@ pk = compute_cross_box_rand(data[:,0], data[:,1], data[:,2], wdata,
                        rand[:,0], rand[:,1], rand[:,2], wrand, 
                        data[:,0], data[:,1], data[:,2], wdata, 
                        rand[:,0], rand[:,1], rand[:,2], wrand,
-                       powspec_conf_file = "test/powspec_cross.conf",
-                       output_auto = ["test/box_auto_test_rand_1.powspec", "test/box_auto_test_rand_2.powspec"],
-                       output_cross = "test/box_cross_test_rand.powspec")
+                       conf = "test/powspec_cross.conf",
+                       auto = ["test/box_auto_test_rand_1.powspec", "test/box_auto_test_rand_2.powspec"],
+                       cross = "test/box_cross_test_rand.powspec")
 
 print("Plotting", flush=True)
 fig, ax = pplt.subplots(nrows=1, ncols=3, share = 0)
@@ -42,8 +42,8 @@ fig.savefig('test/test_box_rand.png', dpi=300)
 
 pk = compute_auto_box_rand(data[:,0], data[:,1], data[:,2], wdata,
                       rand[:,0], rand[:,1], rand[:,2], wrand, 
-                      powspec_conf_file = "test/powspec_auto.conf",
-                      output_file = "test/box_auto_test_rand.powspec")
+                      conf = "test/powspec_auto.conf",
+                      auto = "test/box_auto_test_rand.powspec")
 print("Plotting", flush=True)
 
 for i in range(3):

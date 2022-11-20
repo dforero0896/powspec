@@ -36,12 +36,12 @@ def hankel_sum(k, P, smooth_a, sarr, ell):
 
 try:
     import pandas as pd
-    data_fname = "/global/project/projectdirs/desi/users/UNIT-BAO-RSD-challenge/Reconstruction/Results_stage2/PyRec_FD/UNITSIM/LRG/LRG-wpmax-v3-snap103-redshift0.74_dens0_s10.0.dat.npy"
+    data_fname = "/global/cfs/cdirs/desi/users/UNIT-BAO-RSD-challenge/Reconstruction/Results_stage2/PyRec_FD/UNITSIM/LRG/LRG-wpmax-v3-snap103-redshift0.74_dens0_s10.0.dat.npy"
     data = np.load(data_fname).astype(np.double)
-    rand_fname = "/global/project/projectdirs/desi/users/UNIT-BAO-RSD-challenge/Reconstruction/Results_stage2/PyRec_FD/UNITSIM/LRG/LRG-wpmax-v3-snap103-redshift0.74_dens0_s10.0_seed7.ran.npz"
+    rand_fname = "/global/cfs/cdirs/desi/users/UNIT-BAO-RSD-challenge/Reconstruction/Results_stage2/PyRec_FD/UNITSIM/LRG/LRG-wpmax-v3-snap103-redshift0.74_dens0_s10.0_seed7.ran.npz"
     rand = np.load(rand_fname)['sym'].astype(np.double)
     nobj = data.shape[0]
-    ref_fn = "/global/project/projectdirs/desi/users/UNIT-BAO-RSD-challenge/Reconstruction/Results_stage2/PyRec_FD/UNITSIM/LRG/LRG-wpmax-v3-snap103-redshift0.74_dens0_s10.0_seed7.sym_powspec.dat"
+    ref_fn = "/global/cfs/cdirs/desi/users/UNIT-BAO-RSD-challenge/Reconstruction/Results_stage2/PyRec_FD/UNITSIM/LRG/LRG-wpmax-v3-snap103-redshift0.74_dens0_s10.0_seed7.sym_powspec.dat"
 except:
     print("WARNING: Read catalog failed, testing with uniform random.", flush=True)
     seed = 42
@@ -60,9 +60,9 @@ pk = compute_cross_box_rand(data[:,0], data[:,1], data[:,2], wdata,
                        rand[:,0], rand[:,1], rand[:,2], wrand, 
                        data[:,0], data[:,1], data[:,2], wdata, 
                        rand[:,0], rand[:,1], rand[:,2], wrand,
-                       powspec_conf_file = "test/powspec_cross.conf",
-                       output_auto = ["test/box_auto_test_recon_1.powspec", "test/box_auto_test_recon_2.powspec"],
-                       output_cross = "test/box_cross_test_recon.powspec")
+                       conf = "test/powspec_cross.conf",
+                       auto = ["test/box_auto_test_recon_1.powspec", "test/box_auto_test_recon_2.powspec"],
+                       cross = "test/box_cross_test_recon.powspec")
 kmask = (pk['k'] > kmin) & (pk['k'] < kmax)
 print("Plotting", flush=True)
 fig, ax = pplt.subplots(nrows=2, ncols=3, share = 0)
@@ -79,8 +79,8 @@ fig.savefig('test/test_box_recon.png', dpi=300)
 
 pk = compute_auto_box_rand(data[:,0], data[:,1], data[:,2], wdata,
                       rand[:,0], rand[:,1], rand[:,2], wrand, 
-                      powspec_conf_file = "test/powspec_auto.conf",
-                      output_file = "test/box_auto_test_recon.powspec")
+                      conf = "test/powspec_auto.conf",
+                      auto = "test/box_auto_test_recon.powspec")
 print("Plotting", flush=True)
 
 for i in range(3):
