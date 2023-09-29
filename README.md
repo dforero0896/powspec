@@ -14,6 +14,7 @@ First, compilation of the wrappes should be as easy as the original code. Once t
 Once the library is compiled, add the directory containing it to your `PATH`. Here is an example
 
 ### Auto power spectrum of simulation boxes
+## From data catalogs
 ```python
 import numpy as np
 import sys
@@ -30,6 +31,35 @@ pk = compute_auto_box(data[:,0], data[:,1], data[:,2], w,
                       powspec_conf_file = "test/powspec_auto.conf",
                       output_file = "test/box_auto_test.powspec")
 ```
+## From a mesh
+Now the wrapper suppors computing power spectra from meshes, represented as numpy arrays that **MUST BE CONTIGUOUS IN MEMORY**. You should also make sure that your meshing algorithm (CIC, NGP, ...) metches the option you set up in the configuration file, otherwise the aliasing corrections will cause the power spectrum to be wrong. 
+```python
+import numpy as np
+import sys
+sys.path.append("/global/u1/d/dforero/codes/powspec_py/powspec/")
+from pypowspec import compute_auto_box_mesh
+
+
+seed = 42
+np.random.seed(seed)
+nobj = int(1e4)
+data = 1000. * np.random.random((nobj, 3)).astype(np.double)
+def ngp(grid_size, box_size, data):
+    i = ((data[:,0] / box_size) * grid_size).astype(int)
+    j = ((data[:,1] / box_size) * grid_size).astype(int)
+    k = ((data[:,2] / box_size) * grid_size).astype(int)
+    
+    grid = np.zeros((grid_size,)*3)
+    for ii in range(data.shape[0]):
+        grid[i[ii], j[ii], k[ii]] += 1
+    #grid[(i,j,k)] += 1
+    return grid
+grid = ngp(512, 1000., data)
+
+# The configuration file MUST have ngp set as the gridding method
+pk = compute_auto_box_mesh(grid, "test/powspec_auto.conf")
+```
+
 Providing an `output_file` triggers saving of the results in text format (results are still returned in `pk`). Otherwise the user can save `pk` as they please (i.e. binary format). Here `pk` is a dictionary containing the results. The most relevant values are `k`, and `multipoles` the latter of which is a numpy array of shape `(<number_k_bins>, <number_multipoles>)`. Some important metadata is also stored provided such as the `normalisation` and `shot_ noise`.
 
 ### Cross power spectrum of simulation boxes
