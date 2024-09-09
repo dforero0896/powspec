@@ -88,7 +88,7 @@ PK *compute_pk(CATA *cata, bool save_out, bool has_randoms, int argc, char *argv
 
 
 
-PK *compute_pk_mesh(double *raw_mesh, bool save_out, int argc, char *argv[]) {
+PK *compute_pk_mesh(double *raw_mesh, size_t grid_size, bool save_out, int argc, char *argv[]) {
   //printf("The following arguments were passed to main():\n");
   //printf("argnum \t value \n");
   //for (int i = 0; i<argc; i++) printf("%d \t %s \n", i, argv[i]);
@@ -102,7 +102,9 @@ PK *compute_pk_mesh(double *raw_mesh, bool save_out, int argc, char *argv[]) {
   }
   conf->has_randoms = false;
   conf->ndata = 1; // Trigger XPk computation even if not saved
-  
+
+  printf("Overriding parameter file grid size %i with size of provided grid %i.\n", conf->gsize, grid_size);
+  conf->gsize = grid_size;
   if (!conf->issim){
     printf(FMT_FAIL);
     P_EXT("Power spectrum from mesh only available for simulations.\n");

@@ -156,7 +156,7 @@ cdef extern from "read_cata.h":
 cdef extern from "powspec.h":
 
     PK *compute_pk(CATA* cata, bint save_out, bint has_randoms, int argc, char* argv[]) nogil;
-    PK* compute_pk_mesh(double *raw_mesh, bint save_out, int argc, char *argv[]) nogil;
+    PK* compute_pk_mesh(double *raw_mesh, size_t grid_size, bint save_out, int argc, char *argv[]) nogil;
 
 # multipole.h
 
@@ -1094,7 +1094,7 @@ def compute_auto_box_mesh(double[:,:,:] raw_mesh,
     #if not raw_mesh.flags['C_CONTIGUOUS']:
     #    raw_mesh = np.ascontiguousarray(raw_mesh)
     
-    cdef PK* pk = compute_pk_mesh(&raw_mesh[0,0,0], <bint> save_out, argc, argv)
+    cdef PK* pk = compute_pk_mesh(&raw_mesh[0,0,0], <size_t> raw_mesh.shape[0], <bint> save_out, argc, argv)
     if pk is NULL: raise ValueError("Could not create PK structure.")
     pk_result = {}
     pk_result['n_data_objects'] = 1
